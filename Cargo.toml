@@ -1,0 +1,10 @@
+[package]
+name = "loki"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["parser_dbg"]
+
+lexer_dbg = []
+parser_dbg = []

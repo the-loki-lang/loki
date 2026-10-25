@@ -1,0 +1,78 @@
+A grammar for loki programming language
+
+Note: This grammar is not affecting how
+      parser code work, its just a plain
+      text to helping building the logic
+      oh the parser.
+
+Rule:
+    PascalCase -> grammar
+    lowercase -> keyword
+    UPPERCASE -> constant
+    'quote' -> token
+    _underscore -> helper
+
+-------
+
+ExprList = Expr (',', Expr)* 
+
+IdentList = IDENT (',' IDENT)*
+
+Expr = 
+     | IdentBranch
+     | IfExpr
+     | Logic
+
+ForLoop = for '(' IDENT in Expr ')' Expr
+
+While = while '(' Expr ')' Expr
+
+IfExpr = 
+       | IfBranch (else IfBranch)*
+       | IfBranch else Expr
+
+IfBranch =
+         | if '(' Expr ')' Expr
+         | if '(' Expr ')' IfBlock
+
+IfBlock = do Expr* (end | else)
+
+IdentBranch =
+            | VarDeclr
+            | VarAssign
+            | Logic
+
+VarDeclr = 
+         | mut? IdentList ':' IDENT
+         | mut? IdentList ':' IDENT '=' ExprList
+         | mut? IdentList ':' '=' ExprList
+
+VarAssign = IdentList '=' ExprList
+
+Logic = Comparative ('&&' | '||') Comparative
+
+Comparative = Sum ('==' | '>=' | '<=' | '<' | '>' | '!=') Sum
+
+Sum = Product ('+' | '-') Product
+
+Unary = ('-' | '!' | '+') Unary | Primary
+
+Product = Primary ('+' | '-') Primary
+
+Primary = NUMBER
+
+
+[Constant Literal]
+
+NUMBER = INT | FLOAT
+
+
+INT = _num ('_'? _num)*
+
+FLOAT = _num (('.' _num) | ('_'? _num))*
+
+_num = [0-9]
+
+IDENT = (_alphabet | '_') (_alphabet | _num | '_')*
+
+_alphabet = [A-Za-z]
