@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::loki_core::ast::{
     diag::{Diag, DiagLevel},
     node::Ident,
@@ -14,6 +16,12 @@ pub enum Type {
     I128,
     Usize,
     Unknown,
+    Bool,
+    Nil,
+    Func {
+        params: HashMap<String, Self>,
+        return_ty: Box<Self>,
+    },
 }
 
 impl Type {
@@ -43,6 +51,7 @@ impl TryFrom<&Ident> for Type {
     type Error = Diag;
     fn try_from(value: &Ident) -> Result<Self, Self::Error> {
         match value.name() {
+            "bool" => Ok(Self::Bool),
             "i8" => Ok(Self::I8),
             "i16" => Ok(Self::I16),
             "i32" => Ok(Self::I32),

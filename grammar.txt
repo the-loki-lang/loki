@@ -14,14 +14,18 @@ Rule:
 
 -------
 
-ExprList = Expr (',', Expr)* 
+ExprList = Expr (',' (Expr, ',')*)?
 
-IdentList = IDENT (',' IDENT)*
+IdentList = IDENT (',' (IDENT, ',')*)?
 
 Expr = 
      | IdentBranch
      | IfExpr
      | Logic
+
+Func = func '(' Params ')' IDENT ':' Expr
+
+Params = (VarDeclr ',')*
 
 ForLoop = for '(' IDENT in Expr ')' Expr
 
@@ -55,7 +59,15 @@ Comparative = Sum ('==' | '>=' | '<=' | '<' | '>' | '!=') Sum
 
 Sum = Product ('+' | '-') Product
 
-Unary = ('-' | '!' | '+') Unary | Primary
+Unary = ('-' | '!' | '+') Unary | Postfix
+
+Postfix = Call | Primary
+
+Call = Primary '(' Args ')'
+
+Args = (Arg ',')*
+
+Arg = (IDENT '=' Expr) | Expr
 
 Product = Primary ('+' | '-') Primary
 

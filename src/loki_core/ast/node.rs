@@ -10,9 +10,11 @@ pub enum Expr {
     Literal(Literal, Location),
     Binary(Binary),
     Block(Block),
+    Call(Call),
     Identifier(Ident),
     IfExpr(IfExpr),
     ForExpr(ForExpr),
+    FuncDeclr(FuncDeclr),
     Unary(Unary),
     VarDeclr(VarDeclr),
     VarAssign(VarAssign),
@@ -25,14 +27,113 @@ impl Expr {
             Expr::Literal(.., location) => *location,
             Expr::Binary(binary) => todo!(),
             Expr::Block(block) => todo!(),
-            Expr::Identifier(identifier) => todo!(),
+            Expr::Identifier(identifier) => identifier.location,
             Expr::IfExpr(if_expr) => todo!(),
             Expr::ForExpr(for_expr) => for_expr.location,
+            Expr::FuncDeclr(func_declr) => func_declr.location,
             Expr::Unary(unary) => unary.location,
             Expr::VarDeclr(var_declr) => todo!(),
             Expr::VarAssign(var_assign) => todo!(),
             Expr::While(while_loop) => while_loop.location,
+            Expr::Call(call) => call.location,
         }
+    }
+
+    pub fn try_into_var_declr(self) -> Result<VarDeclr, Self> {
+        if let Self::VarDeclr(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Call {
+    location: Location,
+    calle: Box<Expr>,
+    args: Rc<[Arg]>,
+}
+
+impl Call {
+    pub fn new(location: Location, calle: Expr, args: Rc<[Arg]>) -> Self {
+        Self {
+            location,
+            calle: Box::new(calle),
+            args,
+        }
+    }
+
+    pub fn location(&self) -> Location {
+        self.location
+    }
+
+    pub fn calle(&self) -> &Expr {
+        &self.calle
+    }
+
+    pub fn args(&self) -> &[Arg] {
+        &self.args
+    }
+}
+
+#[derive(Debug)]
+pub struct Arg {
+    keyword: Option<Ident>,
+    value: Expr,
+}
+
+impl Arg {
+    pub fn new(keyword: Option<Ident>, value: Expr) -> Self {
+        Self { keyword, value }
+    }
+
+    pub fn keyword(&self) -> Option<&Ident> {
+        self.keyword.as_ref()
+    }
+
+    pub fn value(&self) -> &Expr {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FuncDeclr {
+    location: Location,
+    params: Rc<[VarDeclr]>,
+    return_ty: Option<Ident>,
+    body: Box<Expr>,
+}
+
+impl FuncDeclr {
+    pub fn new(
+        location: Location,
+        params: Rc<[VarDeclr]>,
+        return_ty: Option<Ident>,
+        body: Expr,
+    ) -> Self {
+        Self {
+            location,
+            params,
+            return_ty,
+            body: Box::new(body),
+        }
+    }
+
+    pub fn location(&self) -> Location {
+        self.location
+    }
+
+    pub fn params(&self) -> &[VarDeclr] {
+        &self.params
+    }
+
+    pub fn body(&self) -> &Expr {
+        &self.body
+    }
+
+    pub fn return_ty(&self) -> Option<&Ident> {
+        self.return_ty.as_ref()
     }
 }
 

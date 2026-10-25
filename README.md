@@ -11,7 +11,7 @@
 
 A simple programming language *for you, for all of us.*
 
-[Explore the docs](the-loki-lang.github.io)
+[Explore the docs](https://the-loki-lang.github.io/loki/)
 
 [Report Bug](https://github.com/the-loki-lang/loki/issues)
 
@@ -47,7 +47,7 @@ Follow these simple steps to set up a local copy of the project for development 
 ### Installation
 
 ```zsh
-git clone https://github.com.git
+git clone https://github.com/the-loki-lang/loki/
 cd loki
 ```
 ## Usage
@@ -61,7 +61,7 @@ cargo build --release
 
 - Run the repl
 ```bash
-build/main
+target/release/loki
 ```
 
 ## Roadmap

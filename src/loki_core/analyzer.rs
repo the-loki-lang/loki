@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     loki_core::ast::{
         diag::{Diag, DiagLevel},
-        node::{Expr, Ident, IfExpr, VarDeclr},
+        node::{Call, Expr, FuncDeclr, Ident, IfExpr, VarDeclr},
         span::Location,
         token::TokenKind as TKind,
         types::Type,
@@ -33,6 +33,14 @@ impl Analyzer {
     pub fn analyze(&mut self, src: String, nodes: Rc<[Expr]>) -> Vec<Diag> {
         self.src = src;
         self.nodes = nodes;
+        self.scope.insert_info(
+            "true",
+            SymInfo::new(Type::Bool, Location::new(0, 0, 0), Mutability::Immutable),
+        );
+        self.scope.insert_info(
+            "false",
+            SymInfo::new(Type::Bool, Location::new(0, 0, 0), Mutability::Immutable),
+        );
         let mut diags: Vec<Diag> = vec![];
         for node in self.nodes.clone().iter() {
             if let Err(diag) = self.expr(node) {
@@ -58,8 +66,8 @@ impl Analyzer {
                 let rhs = binary.rhs();
                 if lhs != self.expr(rhs)? {
                     return Err(Diag::new(
-                        DiagLevel::Error("Type of lhs must be same as rhs"),
-                        "this is different than rhs type.",
+                        DiagLevel::Error("Type of rhs must be same as lhs"),
+                        "this is different than lhs type.",
                         rhs.location(),
                     ));
                 }
@@ -139,17 +147,137 @@ impl Analyzer {
                             ));
                         }
                     }
-                    Type::Infered | Type::Unknown => {
+                    Type::Bool => {
+                        if unary.op() != &TKind::Bang {
+                            return Err(Self::error(
+                                "'bool' type can only use the '!' unary operator",
+                                "cannot use this",
+                                unary.location(),
+                            ));
+                        }
+                    }
+                    Type::Infered | Type::Unknown | Type::Nil | Type::Func { .. } => {
                         return Err(Self::error(
                             "Type Error",
                             "Invalid unary expression",
                             unary.location(),
                         ));
                     }
-                };
+                }
                 Ok(ty)
             }
+            Expr::FuncDeclr(func_declr) => self.func_declr(func_declr),
+            Expr::Call(call) => self.call(call),
         }
+    }
+
+    fn call(&mut self, call: &Call) -> Result<Type, Diag> {
+        let ty = match call.calle() {
+            Expr::Identifier(ident) => self.scope.get(ident.name()).unwrap().0.ty(),
+            _ => todo!(),
+        };
+        match ty {
+            Type::Func { params, return_ty } => {
+                let return_ty = *return_ty.clone();
+                let params_len = params.len();
+                let args_len = call.args().len();
+
+                if params_len > args_len {
+                    return Err(Self::error(
+                        "Args length is less than the parameters length",
+                        "add the missing arguments",
+                        call.location(),
+                    ));
+                } else if params_len < args_len {
+                    return Err(Self::error(
+                        "Args length is more than the parameters length",
+                        "remove the extra arguments",
+                        call.location(),
+                    ));
+                }
+
+                let params = params.clone();
+                let param_ty: Vec<&Type> = params.values().collect();
+
+                for (i, arg) in call.args().iter().enumerate() {
+                    if let Some(keyword) = arg.keyword() {
+                        if !params.contains_key(keyword.name()) {
+                            return Err(Self::error(
+                                "Func call has unknown keyword",
+                                "no matched keyword found",
+                                keyword.location(),
+                            ));
+                        }
+                        if &self.expr(arg.value())? != params.get(keyword.name()).unwrap() {
+                            return Err(Self::error(
+                                "Args type is different than the parameter type",
+                                "",
+                                arg.value().location(),
+                            ));
+                        }
+                    } else if self.expr(arg.value())? != *param_ty[i] {
+                        return Err(Self::error(
+                            "Args type is different than the parameter type",
+                            "",
+                            arg.value().location(),
+                        ));
+                    }
+                }
+
+                Ok(return_ty)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn func_declr(&mut self, func: &FuncDeclr) -> Result<Type, Diag> {
+        let mut params: HashMap<String, Type> = HashMap::new();
+
+        for param in func.params() {
+            let value = self.var_declr(param)?;
+            for var in param.vars() {
+                params.insert(
+                    var.name().to_owned(),
+                    if let Some(ty) = param.ty() {
+                        ty.try_into()?
+                    } else {
+                        value.clone()
+                    },
+                );
+            }
+        }
+
+        let return_ty: Type = if let Some(ty) = func.return_ty() {
+            ty.try_into()?
+        } else {
+            Type::Nil
+        };
+
+        let body = func.body();
+
+        if self.expr(body)? != return_ty {
+            return func.return_ty().map_or_else(
+                || {
+                    Err(Self::error(
+                        "Expected nil as the return type",
+                        "the value is not nil",
+                        body.location(),
+                    ))
+                },
+                |return_ty| {
+                    Err(Self::error(
+                        "Return value type is different than the annotated type",
+                        "annotated here",
+                        return_ty.location(),
+                    ))
+                },
+            );
+        }
+
+        Ok(Type::Func {
+            params: params.into(),
+            return_ty: Box::new(return_ty),
+        })
     }
 
     pub fn if_expr(&mut self, if_expr: &IfExpr) -> Result<Type, Diag> {
@@ -215,10 +343,11 @@ impl Analyzer {
                     ),
                 );
             }
+            return Ok(value_ty);
         }
 
         let vars = var_declr.vars();
-        if values.len() != vars.len() && values.len() != 1 {
+        if values.len() != vars.len() {
             return Err(Self::error(
                 "Unmatched variable group",
                 "expected same or 1 value",

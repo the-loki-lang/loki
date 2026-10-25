@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use crate::loki_core::ast::diag::Diag;
 use crate::loki_core::ast::node::{
-    Binary, Block, Expr, ForExpr, Ident, IfExpr, Unary, VarAssign, VarDeclr, While,
+    Arg, Binary, Block, Call, Expr, ForExpr, FuncDeclr, Ident, IfExpr, Unary, VarAssign, VarDeclr,
+    While,
 };
 use crate::loki_core::ast::span::Location;
 use crate::loki_core::ast::token::{Token, TokenKind as TKind};
@@ -69,7 +70,7 @@ impl<'src> Parser<'src> {
                 self.consume_newline();
                 Ok(())
             }
-            _ => Err(self.error("Expected EOF", "")),
+            _ => Err(self.error("Expected EOF or Newline", "")),
         }
     }
 
@@ -105,6 +106,7 @@ impl<'src> Parser<'src> {
             TKind::KeywordWhile => self.while_loop(),
             TKind::KeywordMut => self.var_declaration(),
             TKind::KeywordFor => self.for_loop(),
+            TKind::KeywordFunc => self.func(),
             TKind::Identifier(_) => self.ident_branch(),
             _ if self.current_is_ident_list() => self.ident_branch(),
             _ => self.logical(),
@@ -124,6 +126,50 @@ impl<'src> Parser<'src> {
         }
         self.expect(&TKind::KeywordEnd, "Expected end keyword")?;
         Ok(Expr::Block(Block::new(expressions.into())))
+    }
+
+    fn func(&mut self) -> ParseResult {
+        let start = self.current()?.location().start();
+        self.advance(); // func
+
+        self.expect(&TKind::Lparen, "Expected Lparen '('")?;
+        let params = self.params()?;
+        self.expect(&TKind::Rparen, "Expected Rparen ')'")?;
+
+        let return_ty = if self.matched(&TKind::Colon) {
+            self.advance();
+            None
+        } else {
+            let ty = Some(self.identifier()?);
+            self.expect(&TKind::Colon, "Expected Colon ':'")?;
+            ty
+        };
+        let body = self.expr()?;
+
+        let end = self.current()?.location();
+        let location = Location::new(start, end.end(), end.line());
+
+        Ok(Expr::FuncDeclr(FuncDeclr::new(
+            location, params, return_ty, body,
+        )))
+    }
+
+    fn params(&mut self) -> Result<Rc<[VarDeclr]>, Diag> {
+        let mut params: Vec<VarDeclr> = vec![];
+
+        loop {
+            if self.matched(&TKind::Rparen) {
+                break;
+            }
+
+            params.push(self.var_declaration()?.try_into_var_declr().unwrap());
+
+            if self.matched(&TKind::Comma) {
+                self.advance();
+            }
+        }
+
+        Ok(params.into())
     }
 
     fn for_loop(&mut self) -> ParseResult {
@@ -342,8 +388,57 @@ impl<'src> Parser<'src> {
                 let location = Location::new(start, end.end(), end.line());
                 Ok(Expr::Unary(Unary::new(location, op, expr)))
             }
-            _ => self.primary(),
+            _ => self.postfix(),
         }
+    }
+
+    fn postfix(&mut self) -> ParseResult {
+        let expr = self.primary();
+        if self.matched(&TKind::Lparen) {
+            return self.call(expr?);
+        }
+        expr
+    }
+
+    fn call(&mut self, calle: Expr) -> ParseResult {
+        let start = calle.location().start();
+
+        self.advance(); // '('
+        let args = self.args()?;
+        self.expect(&TKind::Rparen, "Expected Rparen ')'")?;
+
+        let end = self.current()?.location();
+        let location = Location::new(start, end.end(), end.line());
+        Ok(Expr::Call(Call::new(location, calle, args)))
+    }
+
+    fn args(&mut self) -> Result<Rc<[Arg]>, Diag> {
+        let mut args: Vec<Arg> = vec![];
+        self.consume_newline();
+        loop {
+            if self.matched(&TKind::Rparen) {
+                break;
+            }
+            args.push(self.arg()?);
+
+            if self.matched(&TKind::Comma) {
+                self.advance();
+                self.consume_newline();
+            }
+        }
+        Ok(args.into())
+    }
+
+    fn arg(&mut self) -> Result<Arg, Diag> {
+        if let Ok(next) = self.next()
+            && next.kind() == &TKind::Equal
+        {
+            let keyword = self.identifier()?;
+            self.advance(); // =
+            let value = self.expr()?;
+            return Ok(Arg::new(Some(keyword), value));
+        }
+        Ok(Arg::new(None, self.expr()?))
     }
 
     fn primary(&mut self) -> ParseResult {

@@ -52,6 +52,7 @@ pub enum TokenKind {
     KeywordEnd,
     KeywordWhile,
     KeywordMut,
+    KeywordFunc,
     KeywordFor,
     KeywordIn,
 }
@@ -91,6 +92,7 @@ impl TokenKind {
             Self::KeywordElse => "else",
             Self::KeywordDo => "do",
             Self::KeywordEnd => "end",
+            Self::KeywordFunc => "func",
             Self::KeywordMut => "mut",
             Self::KeywordWhile => "while",
             Self::KeywordFor => "for",

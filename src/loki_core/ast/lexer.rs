@@ -36,10 +36,7 @@ impl<'src> Lexer<'src> {
                 ',' => Token::new(Kind::Comma, self.location),
                 '(' => Token::new(Kind::Lparen, self.location),
                 ')' => Token::new(Kind::Rparen, self.location),
-                '=' | '<' | '>' | '&' | '|' | '!' => match self.scan_potential(current) {
-                    Some(value) => value,
-                    None => break,
-                },
+                '=' | '<' | '>' | '&' | '|' | '!' => self.scan_potential(current),
                 '\n' | ';' => Token::new(Kind::Newline, self.location),
                 _ if current.is_whitespace() => {
                     self.advance();
@@ -64,9 +61,9 @@ impl<'src> Lexer<'src> {
         Err(&self.diags)
     }
 
-    fn scan_potential(&mut self, current: char) -> Option<Token> {
+    fn scan_potential(&mut self, current: char) -> Token {
         let start = self.location.start();
-        let next = self.peek()?;
+        let next = self.peek().unwrap_or('\0');
         let kind = match (current, next) {
             ('=', '=') => {
                 self.advance();
@@ -98,9 +95,8 @@ impl<'src> Lexer<'src> {
             ('<', _) => Kind::Less,
             _ => unimplemented!(),
         };
-        self.advance();
         let location = Location::new(start, self.location.end(), self.location.line());
-        Some(Token::new(kind, location))
+        Token::new(kind, location)
     }
 
     fn scan_ident(&mut self) -> Token {
@@ -125,6 +121,7 @@ impl<'src> Lexer<'src> {
                 "do" => Kind::KeywordDo,
                 "else" => Kind::KeywordElse,
                 "end" => Kind::KeywordEnd,
+                "func" => Kind::KeywordFunc,
                 "for" => Kind::KeywordFor,
                 "if" => Kind::KeywordIf,
                 "in" => Kind::KeywordIn,
